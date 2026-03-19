@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Audio Visualizer Studio</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --accent: #00e5ff;
+            --accent-hover: #00b8cc;
+            --text-main: #ffffff;
+            --text-muted: #aaaaaa;
+            --danger: #ff4081;
+            --success: #00e676;
+            --border-radius: 8px;
+            --font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Layout */
+        header {
+            padding: 1rem 2rem;
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 60px;
+        }
+
+        h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: 0.5px; }
+        .badge { background: #333; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; color: var(--accent); }
+
+        main { display: flex; flex: 1; height: calc(100vh - 60px); }
+
+        /* Left Panel: Controls */
+        .controls-panel {
+            width: 360px;
+            background-color: var(--panel-bg);
+            padding: 1.5rem;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            z-index: 10;
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+
+        /* Inputs & Buttons */
+        input[type="file"] { display: none; }
+
+        .file-btn {
+            background-color: #333;
+            border: 1px dashed #555;
+            color: var(--text-muted);
+            padding: 10px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        .file-btn:hover { border-color: var(--accent); color: var(--text-main); background-color: #2a2a2a; }
+        .file-btn.active { border-style: solid; border-color: var(--success); color: var(--success); background-color: rgba(0, 230, 118, 0.1); }
+
+        select {
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            padding: 10px;
+            border-radius: var(--border-radius);
+            width: 100%;
+            cursor: pointer;
+            outline: none;
+        }
+
+        /* Color Picker Styles */
+        .color-options {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .color-swatch {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .color-swatch:hover { transform: scale(1.1); }
+        .color-swatch.selected { border-color: white; transform: scale(1.1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+
+        button.primary-btn {
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px;
+            border-radius: var(--border-radius);
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+            margin-top: auto;
+        }
+        button.primary-btn:hover { background-color: var(--accent-hover); }
+        button.primary-btn:active { transform: scale(0.98); }
+        button.primary-btn:disabled { background-color: #444; color: #888; cursor: not-allowed; transform: none; }
+
+        /* Download Button State */
+        button.primary-btn.download-ready {
+            background-color: var(--success);
+            color: #000;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+        }
+
+        /* Right Panel: Canvas Preview */
+        .preview-area {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+            position: relative;
+            padding: 20px;
+        }
+
+        .canvas-container {
+            width: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16/9;
+            background-color: #000;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas { width: 100%; height: 100%; display: block; }
+
+        /* Overlays */
+        .controls-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .canvas-container:hover .controls-overlay { opacity: 1; pointer-events: auto; }
+
+        .overlay-btn {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .overlay-btn:hover { background: var(--accent); color: black; border-color: var(--accent); }
+        .overlay-btn:disabled { background: #444; color: #888; cursor: not-allowed; border-color: #444; }
+
+        .time-display-overlay {
+            font-size: 0.8rem;
+            font-family: monospace;
+            color: #ddd;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 15px;
+            border-radius: 30px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* Status & Feedback */
+        .status-bar { position: absolute; top: 20px; right: 20px; z-index: 100; pointer-events: none; width: 350px; }
+        .toast {
+            background: #333; color: white; padding: 12px 20px; border-radius: 4px;
+            margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease-out; display: flex; align-items: flex-start; gap: 10px;
+            font-size: 0.9rem; border-left: 4px solid var(--accent); line-height: 1.4;
+        }
+        .toast.error { border-left-color: var(--danger); }
+        .toast.success { border-left-color: var(--success); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Recording State */
+        body.recording .controls-overlay { opacity: 1; pointer-events: none; }
+        .recording-indicator {
+            display: none; color: var(--danger); font-weight: bold; align-items: center; gap: 8px;
+            background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px;
+            position: absolute; top: 20px; left: 20px; z-index: 20;
+        }
+        body.recording .recording-indicator { display: flex; }
+        .red-dot { width: 10px; height: 10px; background-color: var(--danger); border-radius: 50%; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .progress-container {
+            width: 100%; height: 4px; background: #444; border-radius: 2px;
+            overflow: hidden; display: none; position: absolute; bottom: 0; left: 0;
+        }
+        .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.2s linear; }
+        body.exporting .progress-container { display: block; }
+
+        @media (max-width: 900px) {
+            main { flex-direction: column; overflow-y: auto; }
+            .controls-panel { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #333; }
+            .preview-area { min-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>AudioViz <span class="badge">Ultimate</span></h1>
+    <div style="font-size: 0.8rem; color: #888;">22 Modes • Direct Download</div>
+</header>
+
+<main>
+    <!-- Controls Section -->
+    <aside class="controls-panel">
+        <div class="control-group">
+            <label>1. Upload Audio (MP3/WAV)</label>
+            <input type="file" id="audioInput" accept="audio/*">
+            <div class="file-btn" id="audioBtn" onclick="document.getElementById('audioInput').click()">
+                <span>Choose Audio File...</span>
+            </div>
+            <small id="audioName" style="display:none; color:var(--accent);"></small>
+        </div>
+
+        <div class="control-group">
+            <label>2. Upload Background Image (Optional)</label>
+            <input type="file" id="bgInput" accept="image/*">
+            <div class="file-btn" id="bgBtn" onclick="document.getElementById('bgInput').click()">
+                <span>Choose Background...</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>3. Pick a Color (16 Options)</label>
+            <div class="color-options" id="colorPicker"></div>
+        </div>
+
+        <div class="control-group">
+            <label>4. Select Visualizer (22 Modes)</label>
+            <select id="vizSelect">
+                <!-- Original 12 -->
+                <optgroup label="Classics">
+                    <option value="bars">Classic Bars</option>
+                    <option value="circular">Radial Spectrum</option>
+                    <option value="wave">Neon Waveform</option>
+                    <option value="orb">Reactive Orb</option>
+                    <option value="mirror">Mirror Bars</option>
+                    <option value="particles">Beat Particles</option>
+                    <option value="spiral">Hypnotic Spiral</option>
+                    <option value="grid">Retro Grid</option>
+                    <option value="bass">Bass Pulse Rings</option>
+                    <option value="mountains">Frequency Mountains</option>
+                    <option value="digital">Digital Rain</option>
+                    <option value="symmetry">Perfect Symmetry</option>
+                </optgroup>
+                <!-- New 10 -->
+                <optgroup label="New & Advanced">
+                    <option value="circleWave">Circle Waveform</option>
+                    <option value="starfield">Warp Starfield</option>
+                    <option value="splitBars">Split Center Bars</option>
+                    <option value="vortex">Deep Vortex</option>
+                    <option value="shockwave">Bass Shockwaves</option>
+                    <option value="dualWave">Dual Echo Wave</option>
+                    <option value="equalizer">Analog Equalizer</option>
+                    <option value="spectrumLine">Spectrum Line Graph</option>
+                    <option value="bands">Frequency Bands</option>
+                    <option value="chaos">Chaos Lines</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <!-- Primary Action Button -->
+        <button id="mainActionBtn" class="primary-btn" disabled>Start Recording</button>
+    </aside>
+
+    <!-- Preview Section -->
+    <section class="preview-area">
+        <div class="canvas-container">
+            <canvas id="mainCanvas" width="1280" height="720"></canvas>
+            
+            <div class="recording-indicator">
+                <div class="red-dot"></div> RECORDING VIDEO
+            </div>
+            
+            <div class="progress-container">
+                <div class="progress-bar" id="exportProgress"></div>
+            </div>
+
+            <div class="controls-overlay">
+                <button class="overlay-btn" id="playPauseBtn">▶ Play / Pause</button>
+                <button class="overlay-btn" id="canvasActionBtn" disabled>⬇ Download Video</button>
+                <div class="time-display-overlay"><span id="currentTime">00:00</span> / <span id="totalTime">00:00</span></div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="status-bar" id="toastContainer"></div>
+
+<audio id="audioElement" crossorigin="anonymous"></audio>
+
+<script>
+    /**
+     * Application State
+     */
+    const state = {
+        isPlaying: false,
+        isExporting: false,
+        audioCtx: null,
+        analyser: null,
+        dataArray: null, 
+        source: null,
+        bgImage: null,
+        vizMode: 'bars',
+        primaryColor: '#00e5ff',
+        animationId: null,
+        mediaRecorder: null,
+        recordedChunks: [],
+        audioDuration: 0,
+        particles: [],
+        stars: [],
+        shockwaves: [],
+        videoBlobUrl: null, // Store the URL for manual download
+        videoFilename: null
+    };
+
+    const DOM = {
+        canvas: document.getElementById('mainCanvas'),
+        ctx: document.getElementById('mainCanvas').getContext('2d'),
+        audio: document.getElementById('audioElement'),
+        audioInput: document.getElementById('audioInput'),
+        audioBtn: document.getElementById('audioBtn'),
+        audioName: document.getElementById('audioName'),
+        bgInput: document.getElementById('bgInput'),
+        bgBtn: document.getElementById('bgBtn'),
+        vizSelect: document.getElementById('vizSelect'),
+        mainActionBtn: document.getElementById('mainActionBtn'), // Sidebar button
+        canvasActionBtn: document.getElementById('canvasActionBtn'), // Overlay button
+        playPauseBtn: document.getElementById('playPauseBtn'),
+        currentTime: document.getElementById('currentTime'),
+        totalTime: document.getElementById('totalTime'),
+        toastContainer: document.getElementById('toastContainer'),
+        progressBar: document.getElementById('exportProgress'),
+        colorPicker: document.getElementById('colorPicker')
+    };
+
+    const CANVAS_WIDTH = 1280;
+    const CANVAS_HEIGHT = 720;
+    const MAX_DURATION = 600;
+    const COLORS = [
+        '#00e5ff', '#ff4081', '#00e676', '#ff9100', 
+        '#d500f9', '#ff1744', '#ffd600', '#2979ff',
+        '#ffffff', '#9e9e9e', '#00bcd4', '#8bc34a',
+        '#ffeb3b', '#ff5722', '#3f51b5', '#e91e63'
+    ];
+
+    /**
+     * Initialization
+     */
+    function init() {
+        DOM.canvas.width = CANVAS_WIDTH;
+        DOM.canvas.height = CANVAS_HEIGHT;
+
+        COLORS.forEach((color, index) => {
+            const div = document.createElement('div');
+            div.className = `color-swatch ${index === 0 ? 'selected' : ''}`;
+            div.style.backgroundColor = color;
+            div.onclick = () => selectColor(color, div);
+            DOM.colorPicker.appendChild(div);
+        });
+
+        for(let i=0; i<400; i++) {
+            state.stars.push({
+                x: Math.random() * CANVAS_WIDTH - CANVAS_WIDTH/2,
+                y: Math.random() * CANVAS_HEIGHT - CANVAS_HEIGHT/2,
+                z: Math.random() * CANVAS_WIDTH
+            });
+        }
+
+        DOM.audioInput.addEventListener('change', handleAudioUpload);
+        DOM.audio.addEventListener('timeupdate', updateProgress);
+        DOM.audio.addEventListener('ended', handleAudioEnded);
+        DOM.audio.addEventListener('loadedmetadata', () => DOM.totalTime.textContent = formatTime(DOM.audio.duration));
+        DOM.bgInput.addEventListener('change', handleBgUpload);
+        DOM.vizSelect.addEventListener('change', (e) => { state.vizMode = e.target.value; drawFrame(); });
+        
+        DOM.playPauseBtn.addEventListener('click', togglePlay);
+        DOM.mainActionBtn.addEventListener('click', handleMainAction);
+        DOM.canvasActionBtn.addEventListener('click', handleMainAction); // Both buttons do the same thing
+
+        clearCanvas();
+        drawPlaceholderText();
+    }
+
+    function selectColor(color, element) {
+        state.primaryColor = color;
+        document.querySelectorAll('.color-swatch').forEach(el => el.classList.remove('selected'));
+        element.classList.add('selected');
+        drawFrame();
+    }
+
+    /**
+     * Audio Logic
+     */
+    function handleAudioUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.type !== 'audio/mpeg' && !file.name.endsWith('.mp3') && file.type !== 'audio/wav') {
+            showToast('Please upload an MP3 or WAV file.', 'error');
+            return;
+        }
+        const url = URL.createObjectURL(file);
+        DOM.audio.src = url;
+        DOM.audioBtn.classList.add('active');
+        DOM.audioBtn.querySelector('span').textContent = file.name;
+        DOM.audioName.style.display = 'block';
+        DOM.audioName.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+        initAudioContext();
+        
+        DOM.audio.onloadedmetadata = () => {
+            state.audioDuration = DOM.audio.duration;
+            if (state.audioDuration > MAX_DURATION) {
+                showToast(`Audio is too long. Max is 10 min.`, 'error');
+                DOM.mainActionBtn.disabled = true;
+                DOM.canvasActionBtn.disabled = true;
+                DOM.audioBtn.classList.remove('active');
+            } else {
+                DOM.mainActionBtn.disabled = false;
+                DOM.canvasActionBtn.disabled = false;
+                DOM.totalTime.textContent = formatTime(state.audioDuration);
+            }
+        };
+    }
+
+    function initAudioContext() {
+        if (!state.audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            state.audioCtx = new AudioContext();
+            state.analyser = state.audioCtx.createAnalyser();
+            state.analyser.fftSize = 2048;
+            
+            const bufferLength = state.analyser.frequencyBinCount;
+            state.dataArray = new Uint8Array(bufferLength);
+
+            state.source = state.audioCtx.createMediaElementSource(DOM.audio);
+            state.source.connect(state.analyser);
+            state.analyser.connect(state.audioCtx.destination);
+            
+            startVisualizationLoop();
+        } else if (state.audioCtx.state === 'suspended') {
+            state.audioCtx.resume();
+        }
+    }
+
+    function togglePlay() {
+        if (!DOM.audio.src) return;
+        if (state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
+        if (DOM.audio.paused) {
+            DOM.audio.play();
+            DOM.playPauseBtn.innerHTML = '⏸ Pause';
+            state.isPlaying = true;
+        } else {
+            DOM.audio.pause();
+            DOM.playPauseBtn.innerHTML = '▶ Play';
+            state.isPlaying = false;
+        }
+    }
+
+    function handleAudioEnded() {
+        state.isPlaying = false;
+        DOM.playPauseBtn.innerHTML = '▶ Play';
+        if (state.isExporting) stopExportProcess();
+    }
+
+    function updateProgress() {
+        DOM.currentTime.textContent = formatTime(DOM.audio.currentTime);
+        if (state.isExporting && state.audioDuration > 0) {
+            const pct = (DOM.audio.currentTime / state.audioDuration) * 100;
+            DOM.progressBar.style.width = `${pct}%`;
+        }
+    }
+
+    function handleBgUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const img = new Image();
+            img.onload = () => { state.bgImage = img; DOM.bgBtn.classList.add('active'); DOM.bgBtn.querySelector('span').textContent = file.name; drawFrame(); };
+            img.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    /**
+     * Visualization Engine
+     */
+    function startVisualizationLoop() {
+        if (state.animationId) cancelAnimationFrame(state.animationId);
+
+        const loop = () => {
+            state.animationId = requestAnimationFrame(loop);
+            if (!state.isExporting && DOM.audio.paused) return;
+            drawFrame();
+        };
+        loop();
+    }
+
+    function drawFrame() {
+        const ctx = DOM.ctx;
+        const w = CANVAS_WIDTH;
+        const h = CANVAS_HEIGHT;
+
+        // Background
+        if (state.bgImage) {
+            drawImageCover(ctx, state.bgImage, w, h);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(0, 0, w, h);
+        } else {
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, '#121212');
+            grad.addColorStop(1, '#000000');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        if (!state.analyser || !state.dataArray) return;
+
+        const bufferLength = state.dataArray.length;
+        const color = state.primaryColor;
+        const rgbaColor = hexToRgba(color, 1);
+
+        switch (state.vizMode) {
+            // Original 12
+            case 'bars': state.analyser.getByteFrequencyData(state.dataArray); drawBars(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'circular': state.analyser.getByteFrequencyData(state.dataArray); drawCircular(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'wave': state.analyser.getByteTimeDomainData(state.dataArray); drawWave(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'orb': state.analyser.getByteFrequencyData(state.dataArray); drawOrb(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'mirror': state.analyser.getByteFrequencyData(state.dataArray); drawMirror(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'particles': state.analyser.getByteFrequencyData(state.dataArray); drawParticles(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'spiral': state.analyser.getByteFrequencyData(state.dataArray); drawSpiral(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'grid': state.analyser.getByteFrequencyData(state.dataArray); drawGrid(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'bass': state.analyser.getByteFrequencyData(state.dataArray); drawBass(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'mountains': state.analyser.getByteFrequencyData(state.dataArray); drawMountains(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'digital': state.analyser.getByteFrequencyData(state.dataArray); drawDigital(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'symmetry': state.analyser.getByteFrequencyData(state.dataArray); drawSymmetry(ctx, state.dataArray, bufferLength, w, h, color); break;
+            
+            // New 10
+            case 'circleWave': state.analyser.getByteTimeDomainData(state.dataArray); drawCircleWave(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'starfield': state.analyser.getByteFrequencyData(state.dataArray); drawStarfield(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'splitBars': state.analyser.getByteFrequencyData(state.dataArray); drawSplitBars(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'vortex': state.analyser.getByteFrequencyData(state.dataArray); drawVortex(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'shockwave': state.analyser.getByteFrequencyData(state.dataArray); drawShockwave(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'dualWave': state.analyser.getByteTimeDomainData(state.dataArray); drawDualWave(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'equalizer': state.analyser.getByteFrequencyData(state.dataArray); drawEqualizer(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'spectrumLine': state.analyser.getByteFrequencyData(state.dataArray); drawSpectrumLine(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'bands': state.analyser.getByteFrequencyData(state.dataArray); drawBands(ctx, state.dataArray, bufferLength, w, h, color); break;
+            case 'chaos': state.analyser.getByteFrequencyData(state.dataArray); drawChaos(ctx, state.dataArray, bufferLength, w, h, color); break;
+        }
+    }
+
+    /* --- Original 12 --- */
+    function drawBars(ctx, data, bufferLength, w, h, color) {
+        const barWidth = (w / bufferLength) * 2.5; let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            const barHeight = data[i] * 1.5;
+            ctx.fillStyle = color; ctx.globalAlpha = i / bufferLength;
+            ctx.fillRect(x, h - barHeight, barWidth, barHeight);
+            x += barWidth + 1; if (x > w) break;
+        } ctx.globalAlpha = 1;
+    }
+    function drawCircular(ctx, data, bufferLength, w, h, color) {
+        const cx = w / 2, cy = h / 2, radius = Math.min(w, h) / 3.5;
+        ctx.save(); ctx.translate(cx, cy);
+        const usefulBuffer = Math.floor(bufferLength * 0.7); const angleStep = (Math.PI * 2) / usefulBuffer;
+        for (let i = 0; i < usefulBuffer; i++) {
+            const value = data[i], barHeight = (value / 255) * (Math.min(w, h) / 3);
+            ctx.rotate(angleStep); ctx.fillStyle = color;
+            ctx.fillRect(0, radius, (Math.PI * 2 * radius) / usefulBuffer - 2, barHeight);
+        } ctx.restore();
+    }
+    function drawWave(ctx, data, bufferLength, w, h, color) {
+        ctx.lineWidth = 3; ctx.strokeStyle = color; ctx.shadowBlur = 10; ctx.shadowColor = color; ctx.beginPath();
+        const sliceWidth = w * 1.0 / bufferLength; let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            const v = data[i] / 128.0, y = v * h / 2;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); x += sliceWidth;
+        } ctx.lineTo(w, h / 2); ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    function drawOrb(ctx, data, bufferLength, w, h, color) {
+        let sum = 0; for (let i = 0; i < 100; i++) sum += data[i];
+        const avg = sum / 100, radius = 100 + (avg * 1.5);
+        const grad = ctx.createRadialGradient(w/2, h/2, radius * 0.5, w/2, h/2, radius);
+        grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.5, hexToRgba(color, 0.5)); grad.addColorStop(1, color);
+        ctx.beginPath(); ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
+        ctx.beginPath(); ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    function drawMirror(ctx, data, bufferLength, w, h, color) {
+        const cx = w / 2, barWidth = 3, maxBars = Math.floor(w / 2 / barWidth);
+        for (let i = 0; i < maxBars && i < bufferLength; i++) {
+            const barHeight = data[i] * 1.2; ctx.fillStyle = color; ctx.globalAlpha = 1 - (i / maxBars);
+            ctx.fillRect(cx - (i * (barWidth + 1)), h - barHeight, barWidth, barHeight);
+            ctx.fillRect(cx + (i * (barWidth + 1)), h - barHeight, barWidth, barHeight);
+        } ctx.globalAlpha = 1;
+    }
+    function drawParticles(ctx, data, bufferLength, w, h, color) {
+        let bass = 0; for(let i=0; i<10; i++) bass += data[i]; bass = bass / 10;
+        if (bass > 200) {
+            for(let k=0; k<3; k++) state.particles.push({ x: w/2, y: h/2, vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10, life: 1.0, size: Math.random() * 5 + 2 });
+        }
+        ctx.fillStyle = color;
+        for (let i = state.particles.length - 1; i >= 0; i--) {
+            let p = state.particles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+            if (p.life <= 0) state.particles.splice(i, 1);
+            else { ctx.globalAlpha = p.life; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+        } ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(w/2, h/2, bass * 0.5, 0, Math.PI*2); ctx.strokeStyle = color; ctx.stroke();
+    }
+    function drawSpiral(ctx, data, bufferLength, w, h, color) {
+        const cx = w/2, cy = h/2; ctx.save(); ctx.translate(cx, cy); ctx.rotate(Date.now() / 1000);
+        const maxRadius = Math.min(w,h)/2 - 20;
+        for(let i=0; i<bufferLength; i+=5) {
+            const r = (i/bufferLength) * maxRadius, val = data[i], angle = i * 0.1;
+            const x = Math.cos(angle) * r, y = Math.sin(angle) * r;
+            ctx.beginPath(); ctx.arc(x, y, val/10, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill();
+        } ctx.restore();
+    }
+    function drawGrid(ctx, data, bufferLength, w, h, color) {
+        const bass = data[5], offset = (Date.now() / 10) % 50 + (bass/5);
+        ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
+        for(let i=0; i<h; i+=50) { let y = i + offset; if(y > h) y -= h; ctx.moveTo(0, y); ctx.lineTo(w, y); }
+        const cx = w/2; for(let i=-w; i<w*2; i+=100) { ctx.moveTo(cx, h); ctx.lineTo(i, 0); }
+        ctx.stroke();
+    }
+    function drawBass(ctx, data, bufferLength, w, h, color) {
+        const cx = w/2, cy = h/2; let bass = 0; for(let i=0; i<20; i++) bass += data[i]; bass = bass / 20;
+        const rings = 5; ctx.lineWidth = 5;
+        for(let i=0; i<rings; i++) {
+            const r = 50 + (i * 40) + (bass * 0.5 * (i+1));
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.strokeStyle = hexToRgba(color, 1 - (i/rings)); ctx.stroke();
+        }
+    }
+    function drawMountains(ctx, data, bufferLength, w, h, color) {
+        ctx.beginPath(); ctx.moveTo(0, h); const barW = w / (bufferLength/4);
+        for(let i=0; i<bufferLength/4; i++) {
+            const val = data[i*4], x = i * barW, y = h - (val * 1.5); ctx.lineTo(x, y);
+        } ctx.lineTo(w, h); ctx.fillStyle = hexToRgba(color, 0.6); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+    }
+    function drawDigital(ctx, data, bufferLength, w, h, color) {
+        const cols = 40, colW = w / cols; ctx.font = '16px monospace'; ctx.fillStyle = color;
+        for(let i=0; i<cols; i++) {
+            const val = data[i * 5], barH = (val / 255) * h, charCount = Math.floor(barH / 20);
+            for(let j=0; j<charCount; j++) {
+                const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+                ctx.globalAlpha = 1 - (j / charCount); ctx.fillText(char, i * colW, h - (j * 20) - 10);
+            }
+        } ctx.globalAlpha = 1;
+    }
+    function drawSymmetry(ctx, data, bufferLength, w, h, color) {
+        const cx = w/2, cy = h/2; ctx.beginPath(); const slice = 32; const radius = 200;
+        for(let i=0; i<slice; i++) {
+            const val = data[i * 4], angle = (Math.PI * 2 / slice) * i, r = radius + (val * 0.8);
+            const x = cx + Math.cos(angle) * r, y = cy + Math.sin(angle) * r;
+            if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        } ctx.closePath(); ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.stroke();
+        ctx.beginPath();
+        for(let i=0; i<slice; i++) {
+            const val = data[i * 4], angle = (Math.PI * 2 / slice) * i, r = radius - (val * 0.8);
+            const x = cx + Math.cos(angle) * r, y = cy + Math.sin(angle) * r;
+            if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        } ctx.closePath(); ctx.strokeStyle = hexToRgba(color, 0.5); ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    /* --- New 10 --- */
+    function drawCircleWave(ctx, data, bufferLength, w, h, color) {
+        const cx = w/2, cy = h/2, radius = 200;
+        ctx.beginPath();
+        for (let i = 0; i < bufferLength; i++) {
+            const v = data[i] / 128.0;
+            const angle = (i / bufferLength) * Math.PI * 2;
+            const r = radius + (v * 50);
+            const x = cx + Math.cos(angle) * r;
+            const y = cy + Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = color; ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    function drawStarfield(ctx, data, bufferLength, w, h, color) {
+        let bass = 0;
+        for(let i=0; i<20; i++) bass += data[i];
+        bass = bass / 20;
+        const speed = 5 + (bass / 5); 
+        ctx.fillStyle = '#fff';
+        state.stars.forEach(star => {
+            star.z -= speed;
+            if(star.z <= 0) {
+                star.z = w;
+                star.x = Math.random() * w - w/2;
+                star.y = Math.random() * h - h/2;
+            }
+            const sx = (star.x / star.z) * w + w/2;
+            const sy = (star.y / star.z) * h + h/2;
+            const size = (1 - star.z / w) * 3;
+            if(sx > 0 && sx < w && sy > 0 && sy < h) {
+                ctx.globalAlpha = 1 - (star.z/w);
+                ctx.fillStyle = color;
+                ctx.beginPath(); ctx.arc(sx, sy, size, 0, Math.PI*2); ctx.fill();
+            }
+        });
+        ctx.globalAlpha = 1;
+    }
+    function drawSplitBars(ctx, data, bufferLength, w, h, color) {
+        const cx = w/2, cy = h/2;
+        const barWidth = (w / bufferLength) * 2.5;
+        let x = 0;
+        for(let i=0; i < bufferLength/2; i++) {
+            const barH = data[i] * 1.5;
+            ctx.fillStyle = color;
+            ctx.globalAlpha = 1 - (i / (bufferLength/2));
+            ctx.fillRect(cx + x, cy - barH, barWidth, barH);
+            ctx.fillRect(cx + x, cy, barWidth, barH);
+            x += barWidth + 1;
+            if (cx + x > w) break;
+        }
+        ctx.globalAlpha = 1;
+    }
+    function drawVortex(ctx, data, bufferLength, w, h, color) {
+        const cx = w/2, cy = h/2;
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(Date.now() / 2000);
+        const rings = 10;
+        for(let i=0; i<rings; i++) {
+            const val = data[i * 10]; 
+            const r = 50 + (i * 30) + (val/3);
+            ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2);
+            ctx.strokeStyle = hexToRgba(color, 1 - (i/rings));
+            ctx.lineWidth = val / 20;
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+    function drawShockwave(ctx, data, bufferLength, w, h, color) {
+        let bass = 0; for(let i=0; i<10; i++) bass += data[i]; bass = bass / 10;
+        if(bass > 140) {
+            state.shockwaves.push({ r: 50, alpha: 1 });
+        }
+        for(let i=state.shockwaves.length-1; i>=0; i--) {
+            let sw = state.shockwaves[i];
+            sw.r += 5 + (bass/20);
+            sw.alpha -= 0.01;
+            if(sw.alpha <= 0) {
+                state.shockwaves.splice(i, 1);
+            } else {
+                ctx.beginPath(); ctx.arc(w/2, h/2, sw.r, 0, Math.PI*2);
+                ctx.strokeStyle = hexToRgba(color, sw.alpha);
+                ctx.lineWidth = 5; ctx.stroke();
+            }
+        }
+    }
+    function drawDualWave(ctx, data, bufferLength, w, h, color) {
+        const sliceWidth = w * 1.0 / bufferLength;
+        let x = 0;
+        ctx.beginPath();
+        for(let i=0; i<bufferLength; i++) {
+            const v = data[i] / 128.0;
+            const y = (v * h/4) + (h/4);
+            if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); x+=sliceWidth;
+        }
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+        x = 0; ctx.beginPath();
+        for(let i=0; i<bufferLength; i++) {
+            const v = data[i] / 128.0;
+            const y = h - ((v * h/4) + (h/4));
+            if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); x+=sliceWidth;
+        }
+        ctx.strokeStyle = hexToRgba(color, 0.5); ctx.lineWidth = 2; ctx.stroke();
+    }
+    function drawEqualizer(ctx, data, bufferLength, w, h, color) {
+        const bands = 20;
+        const bandW = w / bands;
+        for(let i=0; i<bands; i++) {
+            let val = 0;
+            for(let j=0; j<10; j++) val += data[i*10 + j];
+            val = val / 10;
+            const barH = val * 2; 
+            const x = i * bandW;
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x + 5, h/2 - 100, bandW - 10, 200);
+            ctx.fillStyle = color;
+            ctx.fillRect(x + 5, h/2 + 100 - barH, bandW - 10, barH);
+        }
+    }
+    function drawSpectrumLine(ctx, data, bufferLength, w, h, color) {
+        ctx.beginPath();
+        const activeLength = bufferLength / 3; 
+        const sliceWidth = w / activeLength;
+        let x = 0;
+        for(let i=0; i<activeLength; i++) {
+            const v = data[i];
+            const y = h - v;
+            if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            x += sliceWidth;
+        }
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.lineTo(w, h); ctx.lineTo(0, h);
+        ctx.fillStyle = hexToRgba(color, 0.2); ctx.fill();
+    }
+    function drawBands(ctx, data, bufferLength, w, h, color) {
+        const bandW = w / 3;
+        let bass = 0; for(let i=0; i<20; i++) bass += data[i]; bass = bass / 20;
+        ctx.fillStyle = hexToRgba(color, 0.8); ctx.fillRect(0, h - bass, bandW, bass);
+        let mid = 0; for(let i=20; i<100; i++) mid += data[i]; mid = (mid / 80) * 1.5; 
+        ctx.fillStyle = hexToRgba(color, 0.6); ctx.fillRect(bandW, h - mid, bandW, mid);
+        let treble = 0; for(let i=100; i<200; i++) treble += data[i]; treble = (treble / 100) * 2.5; 
+        ctx.fillStyle = hexToRgba(color, 0.4); ctx.fillRect(bandW*2, h - treble, bandW, treble);
+    }
+    function drawChaos(ctx, data, bufferLength, w, h, color) {
+        const step = 10;
+        for(let i=0; i<bufferLength/4; i+=step) {
+            const val = data[i];
+            if(val > 80) {
+                const x = (i / (bufferLength/4)) * w;
+                const y = Math.random() * h;
+                const len = Math.random() * 50 + 10;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + len, y + len);
+                ctx.strokeStyle = hexToRgba(color, val/255);
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+    }
+
+    /**
+     * Export Logic (Manual Download Button)
+     */
+    
+    // Handles both Start Recording and Download File
+    function handleMainAction() {
+        if (state.videoBlobUrl) {
+            // If video is ready, trigger download
+            triggerDownload();
+        } else if (state.isExporting) {
+            // Ignore clicks while recording
+            return;
+        } else {
+            // Start Recording
+            startExportProcess();
+        }
+    }
+
+    function triggerDownload() {
+        if (!state.videoBlobUrl) return;
+
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = state.videoBlobUrl;
+        a.download = state.videoFilename;
+        document.body.appendChild(a);
+        
+        try {
+            a.click();
+            showToast('Saving to Downloads folder...', 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('Download blocked. Opening video in new tab. Right-click to save.', 'error');
+            window.open(state.videoBlobUrl, '_blank');
+        }
+        
+        setTimeout(() => {
+            document.body.removeChild(a);
+        }, 100);
+    }
+
+    async function startExportProcess() {
+        if (!state.audioCtx || !DOM.audio.src) return;
+        
+        // Reset download state
+        state.videoBlobUrl = null;
+        state.videoFilename = null;
+
+        // Resume context just in case
+        if (state.audioCtx.state === 'suspended') await state.audioCtx.resume();
+
+        state.isExporting = true;
+        document.body.classList.add('recording', 'exporting');
+        
+        // Update Button UI
+        updateButtonUI('recording');
+        
+        DOM.vizSelect.disabled = true;
+        
+        showToast('Recording started. Do not close this tab.<br>Download button appears when finished.', 'success');
+        
+        DOM.audio.currentTime = 0;
+
+        const canvasStream = DOM.canvas.captureStream(30);
+        const dest = state.audioCtx.createMediaStreamDestination();
+        state.source.connect(dest);
+        const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+
+        // Determine MIME type
+        let mimeType = 'video/webm';
+        if (MediaRecorder.isTypeSupported('video/mp4')) {
+            mimeType = 'video/mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+            mimeType = 'video/webm;codecs=vp9';
+        }
+
+        const options = { mimeType: mimeType, videoBitsPerSecond: 5000000 };
+        state.mediaRecorder = new MediaRecorder(combinedStream, options);
+        state.recordedChunks = [];
+
+        state.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) state.recordedChunks.push(e.data); };
+        state.mediaRecorder.onstop = exportVideoFile;
+
+        state.mediaRecorder.start();
+        await DOM.audio.play();
+        startVisualizationLoop();
+    }
+
+    function stopExportProcess() {
+        if (!state.isExporting) return;
+        state.mediaRecorder.stop();
+        state.isExporting = false;
+        DOM.audio.pause();
+        document.body.classList.remove('recording');
+        DOM.vizSelect.disabled = false;
+        DOM.progressBar.style.width = '0%';
+        document.body.classList.remove('exporting');
+    }
+
+    function exportVideoFile() {
+        const blobType = state.mediaRecorder.mimeType;
+        const blob = new Blob(state.recordedChunks, { type: blobType });
+        
+        // Prepare the download link
+        state.videoBlobUrl = URL.createObjectURL(blob);
+        const extension = blobType.includes('mp4') ? 'mp4' : 'webm';
+        const dateStr = new Date().toISOString().slice(0,10);
+        state.videoFilename = `Visualizer_Project_${dateStr}.${extension}`;
+        
+        // Update UI to show Download Button
+        updateButtonUI('download');
+        
+        showToast('Video Ready! Click the Green button to Save.', 'success');
+    }
+
+    function updateButtonUI(state) {
+        if (state === 'recording') {
+            DOM.mainActionBtn.disabled = true;
+            DOM.mainActionBtn.textContent = 'Recording... (Wait)';
+            DOM.mainActionBtn.classList.remove('download-ready');
+            
+            DOM.canvasActionBtn.disabled = true;
+            DOM.canvasActionBtn.textContent = 'Recording...';
+        } else if (state === 'download') {
+            DOM.mainActionBtn.disabled = false;
+            DOM.mainActionBtn.textContent = '⬇ SAVE VIDEO TO DOWNLOADS';
+            DOM.mainActionBtn.classList.add('download-ready');
+            
+            DOM.canvasActionBtn.disabled = false;
+            DOM.canvasActionBtn.textContent = '⬇ SAVE VIDEO';
+            DOM.canvasActionBtn.style.backgroundColor = 'var(--success)';
+            DOM.canvasActionBtn.style.color = 'black';
+        }
+    }
+
+    /**
+     * Utilities
+     */
+    function clearCanvas() { DOM.ctx.fillStyle = '#000'; DOM.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); }
+    function drawPlaceholderText() {
+        DOM.ctx.fillStyle = '#333'; DOM.ctx.font = 'bold 30px Arial';
+        DOM.ctx.textAlign = 'center'; DOM.ctx.fillText('Upload Audio to Start', CANVAS_WIDTH/2, CANVAS_HEIGHT/2);
+    }
+    function drawImageCover(ctx, img, w, h) {
+        const imgRatio = img.width / img.height, canvasRatio = w / h;
+        let renderW, renderH, offsetX, offsetY;
+        if (imgRatio > canvasRatio) { renderH = h; renderW = h * imgRatio; offsetX = (w - renderW) / 2; offsetY = 0; }
+        else { renderW = w; renderH = w / imgRatio; offsetX = 0; offsetY = (h - renderH) / 2; }
+        ctx.drawImage(img, offsetX, offsetY, renderW, renderH);
+    }
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    function hexToRgba(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`; 
+        toast.innerHTML = message; 
+        DOM.toastContainer.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 8000); 
+    }
+    window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
